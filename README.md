@@ -124,6 +124,33 @@ Two notes on the versions themselves:
 - **Take your own snapshot first.** The installer runs `boot-guards.sh`, which captures a snapshot of your mkinitcpio `HOOKS` array and pins limine's `TARGET_OS_NAME`/`ENABLE_UKI`/`BOOT_ORDER` so `omarchy-settings` cannot repoint your bootloader at its own UKI. That protects CachyOS's boot config — it is not a backup of your system.
 - **Have a rollback path.** This is expected to change the bootloader, initramfs and login setup. A snapper snapshot before you start is the cheapest insurance: boot limine and pick the snapshot from the `Snapshots` entry.
 
+### After you install: Caps Lock
+
+**Caps Lock does not produce uppercase on a stock v4 install, and this is upstream's design, not a CachyOS bug.** Omarchy 4.x ships this in `/usr/share/omarchy/default/hypr/input.lua`:
+
+```lua
+local kb_options = "compose:caps,shift:both_capslock_cancel"
+```
+
+`compose:caps` reassigns the Caps Lock key to Compose. Compose waits for a compose sequence instead of toggling a caps state, so uppercase stops working and the keyboard's caps LED never lights. Shift keeps working normally, which is why the rest of the keyboard feels fine.
+
+The installer does not patch this, because the file is owned by the `omarchy` package and is regenerated on every `omarchy update`. Apply the override yourself, in your own config, so an update cannot revert it:
+
+```bash
+cp bin/input-override.lua ~/.config/hypr/input.lua
+hyprctl reload        # or log out and back in
+```
+
+`bin/input-override.lua` documents why this works and why editing the packaged file is the wrong move. Keyboard layout is not part of it: Omarchy's default reads `XKBLAYOUT` from `/etc/vconsole.conf`, so a CachyOS install that already declares `es` needs no override.
+
+### The interface is English-only
+
+Omarchy 4.x ships no translations. Its UI is Quickshell/QML with the strings hardcoded in `shell/plugins/menu/`, and there is no `locale`, `i18n`, or gettext catalogue anywhere in the tree — verified across the full v4.0.4 file list.
+
+Your system locale is respected and independent of this: a CachyOS install with `LANG=es_ES.UTF-8` and `XKBLAYOUT=es` gets Spanish date, number and keyboard behaviour, while the Omarchy menu stays English.
+
+Community workarounds exist for 3.x (they rely on `omarchy-menu` being a sourced bash script that loads `~/.config/omarchy/extensions/`). In 4.0.4 `omarchy-menu` is an eight-line wrapper that hands off to `omarchy-shell` over IPC and never reads `extensions/`, so those overrides do not load. The only route is a patched fork of the `omarchy` package with translated QML, which is a real maintenance commitment rather than a config change.
+
 **Note:** Please review the script contents before running to understand what changes will be made to your system.
 
 ## 6. Statement of Lack of Warranty
