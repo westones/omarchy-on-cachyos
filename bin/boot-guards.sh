@@ -99,20 +99,41 @@ LIMINE_DEFAULT="/etc/default/limine"
 # /etc/default/limine is read LAST, we ensure our guard keys are present.
 LIMINE_OVERRIDE_SECTION="# CachyOS boot guard (omarchy-settings override)"
 
+# Re-assert the CachyOS guard on every run.
+#
+# A previous guard may exist while /etc/limine-entry-tool.d/ also holds omarchy's
+# configs — that is exactly the state on a re-run, because omarchy-settings ships
+# those files as package-owned drop-ins that a plain re-install puts back. That
+# used to abort the installer with "Refusing to guess defaults", leaving no way
+# forward without hand-editing. Instead of guessing, re-apply our keys: the values
+# we defend (TARGET_OS_NAME, BOOT_ORDER) and the presence of an existing guard
+# make the correct action unambiguous, and /etc/default/limine is read last so it
+# still wins.
 if [ -d /etc/limine-entry-tool.d ] && \
    grep -qE 'TARGET_OS_NAME|ENABLE_UKI|BOOT_ORDER|CUSTOM_UKI_NAME' /etc/limine-entry-tool.d/*.conf 2>/dev/null; then
-    echo "[boot-guards] WARNING: omarchy limine configs already present."
-    echo "[boot-guards] Refusing to guess defaults. Run this BEFORE installing omarchy-settings."
-    exit 1
+    if [ -f "$LIMINE_DEFAULT" ] && grep -qF "$LIMINE_OVERRIDE_SECTION" "$LIMINE_DEFAULT" 2>/dev/null; then
+        echo "[boot-guards] omarchy limine configs present; re-asserting the existing CachyOS guard."
+    else
+        echo "[boot-guards] ERROR: omarchy limine configs are present but no CachyOS guard exists."
+        echo "[boot-guards] boot-guards.sh must run BEFORE installing omarchy-settings, otherwise"
+        echo "[boot-guards] it has no way to know your pre-omarchy TARGET_OS_NAME or BOOT_ORDER."
+        echo "[boot-guards] Restore them from a snapper snapshot and re-run, or set the values by hand:"
+        echo "[boot-guards]   TARGET_OS_NAME=\"CachyOS\" and BOOT_ORDER in $LIMINE_DEFAULT"
+        exit 1
+    fi
 fi
 
-# Detect current values from the generated limine.conf (best source of truth)
+# Detect current values from the generated limine.conf (best source of truth).
+# limine-entry-tool writes the OS name as a `/+CachyOS` section header, not as a
+# `description:` field, so match that form too. Guarded with `|| true` because
+# grep -P is not guaranteed present and a miss must not abort under set -e.
 CURRENT_OS="CachyOS"
 BOOT_ORDER='*, *lts, *fallback, Snapshots'
-if [ -r /boot/limine.conf ]; then
-    OS_RAW=$(grep -oP '(?<=description:\s).*' /boot/limine.conf 2>/dev/null | head -n1 || true)
+if sudo -n true 2>/dev/null || [ -r /boot/limine.conf ]; then
+    OS_RAW=$(sudo -n grep -oP '(?<=^/\+)\S+' /boot/limine.conf 2>/dev/null | head -n1 || true)
+    [ -z "$OS_RAW" ] && OS_RAW=$(sudo -n grep -oP '(?<=description:\s).*' /boot/limine.conf 2>/dev/null | head -n1 || true)
     [ -n "$OS_RAW" ] && CURRENT_OS="$OS_RAW"
-    ORD_RAW=$(grep -oP '(?<=^set\s+BOOT_ORDER:\s).*' /boot/limine.conf 2>/dev/null | head -n1 || true)
+    ORD_RAW=$(sudo -n grep -oP '(?<=^set\s+BOOT_ORDER:\s).*' /boot/limine.conf 2>/dev/null | head -n1 || true)
     [ -n "$ORD_RAW" ] && BOOT_ORDER="$ORD_RAW"
 fi
 # If a pre-seeded /etc/default/limine declares BOOT_ORDER, defer to it
