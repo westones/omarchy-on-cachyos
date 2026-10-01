@@ -96,7 +96,15 @@ if ! grep -q '^\[omarchy\]' /etc/pacman.conf; then
 else
     echo "Omarchy repository already present in pacman.conf, skipping."
 fi
-sudo pacman -Syu --noconfirm
+# Full system upgrade.
+#
+# OMARCHY_ALLOW_DIRECT_PACMAN is required once omarchy is installed: the omarchy
+# package ships a libalpm pre-transaction hook that blocks bare `pacman -Syu` and
+# points you at `omarchy update`. This script performs the upgrade as a setup step,
+# before any user config exists, so bypassing the guard is correct here. Omitting
+# it makes the installer die at the first run after omarchy is already present,
+# because the hook aborts the whole transaction.
+sudo env OMARCHY_ALLOW_DIRECT_PACMAN=1 pacman -Syu --noconfirm
 
 # ============================================================================
 # Install boot safety guards BEFORE any omarchy-settings package
@@ -245,7 +253,11 @@ function install_v4 {
     local USER_HOME
 
     echo "Installing Omarchy packages via pacman..."
-    sudo pacman -S --needed --noconfirm omarchy omarchy-settings omarchy-nvim
+    # OMARCHY_ALLOW_DIRECT_PACMAN: installing the omarchy package in the same
+    # transaction arming its own libalpm guard. The guard only fires once the
+    # package is present, so the first transaction succeeds, but any later
+    # pacman call in this script would be blocked by it.
+    sudo env OMARCHY_ALLOW_DIRECT_PACMAN=1 pacman -S --needed --noconfirm omarchy omarchy-settings omarchy-nvim
 
     if [ ! -d "$OMARCHY_SHARE" ]; then
         echo "Error: omarchy package installed but $OMARCHY_SHARE missing."
@@ -266,7 +278,7 @@ function install_v4 {
             > "$FILTERED"
         echo "Filtered package list:"
         cat "$FILTERED"
-        sudo pacman -S --needed --noconfirm - < "$FILTERED" \
+        sudo env OMARCHY_ALLOW_DIRECT_PACMAN=1 pacman -S --needed --noconfirm - < "$FILTERED" \
             || echo "Warning: some packages could not be installed."
     else
         echo "Warning: omarchy-base.packages not found at $OMARCHY_SHARE/install/"
