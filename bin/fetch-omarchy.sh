@@ -1,8 +1,13 @@
 #!/bin/bash
 
-# Target destination (relative to this script's location)
+# Target destination (relative to this script's location).
+# The clone goes INSIDE the repo, next to bin/. Two levels up would land outside
+# the repository — at $HOME/omarchy when the repo sits in $HOME, and at a
+# non-existent or non-writable parent when it sits anywhere deeper. That is the
+# "no such file or directory" the old path produced on a plain `git clone` into
+# $HOME. The in-repo location is also what .gitignore's `omarchy/` rule expects.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TARGET_DIR="$SCRIPT_DIR/../../omarchy"
+TARGET_DIR="$SCRIPT_DIR/../omarchy"
 REPO_URL="https://github.com/basecamp/omarchy"
 
 # Fetch available stable version tags, filtering out pre-releases

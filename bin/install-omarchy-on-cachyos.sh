@@ -7,7 +7,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-OMARCHY_DIR="$SCRIPT_DIR/../../omarchy"
+# Must match TARGET_DIR in fetch-omarchy.sh: the clone lands inside the repo,
+# next to bin/, not two levels up outside it.
+OMARCHY_DIR="$SCRIPT_DIR/../omarchy"
 
 # ============================================================================
 # Common prerequisites (v3 and v4)
@@ -45,7 +47,7 @@ if [ -f "$SCRIPT_DIR/fetch-omarchy.sh" ]; then
     "$SCRIPT_DIR/fetch-omarchy.sh"
 else
     echo "fetch-omarchy.sh not found, falling back to default clone..."
-    git clone https://www.github.com/basecamp/omarchy "$OMARCHY_DIR"
+    git clone https://github.com/basecamp/omarchy "$OMARCHY_DIR"
 fi
 
 if [ ! -d "$OMARCHY_DIR" ]; then
