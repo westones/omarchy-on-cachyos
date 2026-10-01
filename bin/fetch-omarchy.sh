@@ -7,7 +7,7 @@ REPO_URL="https://github.com/basecamp/omarchy"
 
 # Fetch available stable version tags, filtering out pre-releases
 echo "Fetching available stable releases from GitHub..."
-ALL_TAGS=($(git ls-remote --tags --refs "$REPO_URL" 2>/dev/null | awk -F/ '{print $3}' | sort -rV))
+mapfile -t ALL_TAGS < <(git ls-remote --tags --refs "$REPO_URL" 2>/dev/null | awk -F/ '{print $3}' | sort -rV)
 
 # Filter out pre-release tags (containing -beta, -alpha, -rc, -dev, -pre, -next)
 RELEASES=()

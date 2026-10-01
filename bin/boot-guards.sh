@@ -35,6 +35,7 @@ elif [ -f /etc/mkinitcpio.conf ]; then
       . /etc/mkinitcpio.conf 2>/dev/null
       for f in /etc/mkinitcpio.conf.d/*.conf; do
           [ -e "$f" ] || continue
+          # shellcheck disable=SC1090  # drop-in path is dynamic by design
           . "$f" >/dev/null 2>&1
       done
       case " ${HOOKS[*]} " in
@@ -58,9 +59,11 @@ else
     # which at this point are the true CachyOS ones since omarchy isn't installed.
     HOOKS=()
     if [ -f /etc/mkinitcpio.conf ]; then
+        # shellcheck disable=SC1091  # config path is fixed but absent here
         . /etc/mkinitcpio.conf
         for f in /etc/mkinitcpio.conf.d/*.conf; do
             [ -e "$f" ] || continue
+            # shellcheck disable=SC1090  # drop-in path is dynamic by design
             . "$f" >/dev/null 2>&1
         done
     fi
