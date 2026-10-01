@@ -17,8 +17,39 @@ for tag in "${ALL_TAGS[@]}"; do
     fi
 done
 
-# Take only the latest 5 stable releases
-RELEASES=("${RELEASES[@]:0:5}")
+# Offer the newest majors, not just the newest tags.
+# Taking the 5 newest stable tags alone makes the previous major unreachable as
+# soon as a new major ships (v4.0.4..v4.0.0 fill the whole list), which strands the
+# v3 branch this script still implements. Take 3 from the newest major and 2 from
+# the one before it, so both install modes stay reachable.
+NEWEST_MAJOR=""
+SECOND_MAJOR=""
+for tag in "${RELEASES[@]}"; do
+    major="${tag#v}"; major="${major%%.*}"
+    if [ -z "$NEWEST_MAJOR" ]; then
+        NEWEST_MAJOR="$major"
+    elif [ "$major" != "$NEWEST_MAJOR" ] && [ -z "$SECOND_MAJOR" ]; then
+        SECOND_MAJOR="$major"
+    fi
+done
+
+PICKED=()
+n_new=0
+n_old=0
+for tag in "${RELEASES[@]}"; do
+    major="${tag#v}"; major="${major%%.*}"
+    if [ "$major" = "$NEWEST_MAJOR" ]; then
+        [ "$n_new" -ge 3 ] && continue
+        n_new=$((n_new + 1))
+    elif [ -n "$SECOND_MAJOR" ] && [ "$major" = "$SECOND_MAJOR" ]; then
+        [ "$n_old" -ge 2 ] && continue
+        n_old=$((n_old + 1))
+    else
+        continue
+    fi
+    PICKED+=("$tag")
+done
+RELEASES=("${PICKED[@]}")
 
 echo "-----------------------------------------------"
 echo "Select the Omarchy version you want to install:"
@@ -57,13 +88,15 @@ else
     echo "Cloning stable version: $SELECTED_TAG..."
 fi
 
-# Detect major version for installer branching
+# Detect major version for installer branching.
+# For a pinned tag the major is in the tag name. For bleeding edge there is no tag
+# to read, so leave it unset and resolve it from the clone below — hardcoding a
+# major here would silently mis-branch whenever main moves to the next version.
 if [ -n "$SELECTED_TAG" ]; then
     OMARCHY_VERSION_MAJOR="${SELECTED_TAG#v}"
     OMARCHY_VERSION_MAJOR="${OMARCHY_VERSION_MAJOR%%.*}"
 else
-    # Bleeding edge: check if main branch has v4 structure
-    OMARCHY_VERSION_MAJOR="4"
+    OMARCHY_VERSION_MAJOR=""
 fi
 
 # Export for the installer to use
@@ -93,4 +126,15 @@ if ! git -c advice.detachedHead=false clone $BRANCH_ARGS $REPO_URL "$TARGET_DIR"
 fi
 
 echo "Successfully cloned Omarchy repository layout."
+
+# Bleeding edge: resolve the major from what we actually cloned. Upstream v4
+# deleted the top-level install.sh, so its presence is the reliable signal.
+if [ -z "$OMARCHY_VERSION_MAJOR" ]; then
+    if [ -f "$TARGET_DIR/install.sh" ]; then
+        OMARCHY_VERSION_MAJOR="3"
+    else
+        OMARCHY_VERSION_MAJOR="4"
+    fi
+    export OMARCHY_VERSION_MAJOR
+fi
 echo "Detected Omarchy major version: $OMARCHY_VERSION_MAJOR"

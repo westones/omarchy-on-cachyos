@@ -42,9 +42,16 @@ if [ -z "${TARGET_HOME}" ]; then
     echo "[!] Could not resolve target home; falling back to \$HOME"
     TARGET_HOME="${HOME}"
 fi
-mkdir -p "${TARGET_HOME}/.config/uwsm"
-if ! grep -q "GBM_BACKEND=nvidia-drm" "${TARGET_HOME}/.config/uwsm/env" 2>/dev/null; then
-    cat >>"${TARGET_HOME}/.config/uwsm/env" <<'EOF'
+# Write to uwsm's own env.d/ convention, not ~/.config/uwsm/env.
+# The flat `env` file only ever worked in v3 because omarchy's own entry point
+# sourced it; v4 ships /usr/share/uwsm/env.d/10-omarchy and the documented user
+# override is ~/.config/uwsm/env.d/<name>. Writing the flat file in v4 would be
+# silently ignored.
+ENV_DIR="${TARGET_HOME}/.config/uwsm/env.d"
+ENV_FILE="${ENV_DIR}/nvidia"
+mkdir -p "$ENV_DIR"
+if ! grep -q "GBM_BACKEND=nvidia-drm" "$ENV_FILE" 2>/dev/null; then
+    cat >>"$ENV_FILE" <<'EOF'
 
 # NVIDIA
 export LIBVA_DRIVER_NAME=nvidia
@@ -54,7 +61,7 @@ export NVD_BACKEND=direct
 export MOZ_DISABLE_RDD_SANDBOX=1
 export CUDA_DISABLE_PERF_BOOST=1
 EOF
-    echo "[*] NVIDIA environment variables written to ${TARGET_HOME}/.config/uwsm/env"
+    echo "[*] NVIDIA environment variables written to ${ENV_FILE}"
 else
     echo "[*] NVIDIA environment variables already present."
 fi

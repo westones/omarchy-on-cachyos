@@ -19,6 +19,25 @@ if ! command -v git &> /dev/null; then
     exit 1
 fi
 
+# Omarchy requires Secure Boot disabled. Upstream's own installer aborts on this,
+# but the v4 package path never runs that guard, and the failure mode is a
+# machine that will not boot rather than a readable error. Checked before any
+# mutation so a wrong answer costs the user nothing.
+if [ -d /sys/firmware/efi ]; then
+    if bootctl status 2>/dev/null | grep -q 'Secure Boot: enabled'; then
+        echo ""
+        echo "Error: Secure Boot is enabled."
+        echo ""
+        echo "Omarchy requires Secure Boot (and TPM) to be disabled in UEFI/BIOS."
+        echo "This cannot be changed from a running system. Reboot into your firmware"
+        echo "settings, disable Secure Boot, then run this script again."
+        echo ""
+        echo "No changes have been made to your system."
+        exit 1
+    fi
+    echo "Secure Boot: disabled (OK)"
+fi
+
 # Fetch Omarchy source
 echo "Fetching Omarchy source..."
 if [ -f "$SCRIPT_DIR/fetch-omarchy.sh" ]; then
@@ -315,10 +334,30 @@ APPLYEOF
     echo ""
     echo "Configuring user..."
 
+    # User configs ship via /etc/skel. For a pre-existing CachyOS user this is a
+    # destructive overlay: omarchy-settings seeds /etc/skel/.config from config/**,
+    # so copying it over $HOME clobbers whatever dotfiles the user already had.
+    # Upstream calls the equivalent operation (omarchy-reinstall-configs)
+    # "destructive: existing user files copied from /etc/skel are clobbered without
+    # backup", so back up first and say so.
+    #
+    # Ordering: do this BEFORE omarchy-provision-user. Provisioning writes runtime
+    # state (skill symlinks, xdg dirs, the finalize-user marker) that must survive.
+    USER_HOME=$(getent passwd "$OMARCHY_USER_NAME" | cut -d: -f6)
+    if [ -d /etc/skel ]; then
+        if [ -n "$USER_HOME" ] && sudo -u "$OMARCHY_USER_NAME" test -d "$USER_HOME/.config"; then
+            BACKUP="$USER_HOME/.config.cachyos-backup-$(date +%Y%m%d-%H%M%S)"
+            echo "Backing up existing ~/.config to $(basename "$BACKUP")..."
+            sudo -u "$OMARCHY_USER_NAME" cp -a "$USER_HOME/.config" "$BACKUP"
+            echo "  -> $BACKUP"
+        fi
+        echo "Copying /etc/skel to $USER_HOME..."
+        sudo -u "$OMARCHY_USER_NAME" cp -af /etc/skel/. "$USER_HOME/"
+    fi
+
     # Run user provisioning as the target user (NOT root).
     # --force only — --first-install forces OMARCHY_SETUP_CONTEXT=iso-chroot,
     # which hard-fails on a missing /opt/packages Node tarball.
-    USER_HOME=$(getent passwd "$OMARCHY_USER_NAME" | cut -d: -f6)
     if command -v omarchy-provision-user &>/dev/null && [ -n "$USER_HOME" ]; then
         echo "Running omarchy-provision-user --force as $OMARCHY_USER_NAME..."
         sudo -u "$OMARCHY_USER_NAME" env \
@@ -335,13 +374,6 @@ APPLYEOF
             OMARCHY_INSTALL="$OMARCHY_SHARE/install" \
             bash "$OMARCHY_SHARE/bin/omarchy-provision-user" --force \
             || echo "Warning: omarchy-provision-user returned non-zero"
-    fi
-
-    # User configs ship via /etc/skel — copy to home so the current account
-    # gets them now
-    if [ -d /etc/skel ]; then
-        echo "Copying /etc/skel to $USER_HOME..."
-        sudo -u "$OMARCHY_USER_NAME" cp -af /etc/skel/. "$USER_HOME/"
     fi
 
     # --- SDDM login ---

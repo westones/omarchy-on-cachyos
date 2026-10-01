@@ -120,11 +120,23 @@ fi
 
 echo "[boot-guards] Limine: TARGET_OS_NAME=$CURRENT_OS, BOOT_ORDER=$BOOT_ORDER"
 
+# Pin ENABLE_UKI only when the user has not already chosen. Forcing no over an
+# explicit ENABLE_UKI=yes would silently switch a working UKI setup to a non-UKI
+# boot, which is the user's decision to make, not ours.
+UKI_LINE=""
+if ! grep -qE '^[[:space:]]*ENABLE_UKI=' "$LIMINE_DEFAULT" 2>/dev/null; then
+    UKI_LINE="ENABLE_UKI=no"
+else
+    echo "[boot-guards] ENABLE_UKI already set in $LIMINE_DEFAULT — respecting it."
+fi
+
 # Ensure guard keys are present (append a well-marked section if needed)
 NEED_LIMINE=false
 if [ -f "$LIMINE_DEFAULT" ]; then
     grep -qF "TARGET_OS_NAME=\"$CURRENT_OS\"" "$LIMINE_DEFAULT" 2>/dev/null || NEED_LIMINE=true
-    grep -qF "ENABLE_UKI=no" "$LIMINE_DEFAULT" 2>/dev/null || NEED_LIMINE=true
+    if [ -n "$UKI_LINE" ]; then
+        grep -qF "$UKI_LINE" "$LIMINE_DEFAULT" 2>/dev/null || NEED_LIMINE=true
+    fi
 else
     NEED_LIMINE=true
 fi
@@ -137,7 +149,7 @@ if [ "$NEED_LIMINE" = true ]; then
 
 $LIMINE_OVERRIDE_SECTION
 TARGET_OS_NAME="$CURRENT_OS"
-ENABLE_UKI=no
+$UKI_LINE
 BOOT_ORDER="$BOOT_ORDER"
 LIMINEEOF
         echo "[boot-guards] Appended guard keys to existing $LIMINE_DEFAULT"
@@ -146,7 +158,7 @@ LIMINEEOF
 # CachyOS boot guard — overrides omarchy-settings limine-entry-tool.d configs
 # Written by boot-guards.sh — safe to regenerate
 TARGET_OS_NAME="$CURRENT_OS"
-ENABLE_UKI=no
+$UKI_LINE
 BOOT_ORDER="$BOOT_ORDER"
 LIMINEEOF
         echo "[boot-guards] Wrote new $LIMINE_DEFAULT"

@@ -91,7 +91,7 @@ Other configuration changes are up to you. Note, however, that this script has n
 
 ```bash
 # Clone the repository
-git clone https://github.com/marlo4220mc/omarchy-on-cachyos.git
+git clone https://github.com/mroboff/omarchy-on-cachyos.git
 
 # Navigate to the project directory
 cd omarchy-on-cachyos/bin
@@ -102,6 +102,27 @@ chmod +x install-omarchy-on-cachyos.sh
 # Run the installation script
 ./install-omarchy-on-cachyos.sh
 ```
+
+### Choosing an Omarchy version
+
+The installer offers the newest tags from the two most recent major versions:
+
+| Choice | Mode | What happens |
+| --- | --- | --- |
+| Bleeding Edge | v4+ | Tracks `main`. Unstable; may stop matching the installer at any time. |
+| `v4.x` tags | packages | Installs the `omarchy` + `omarchy-settings` packages, then runs the system and user setup. This is upstream's supported model. |
+| `v3.x` tags | source | Clones the tree to `../../omarchy`, patches it, and runs the legacy `install.sh`. Kept as an escape hatch. |
+
+Two notes on the versions themselves:
+
+- **v4 is package-based.** Upstream deleted the top-level `install.sh` and moved `install/` into the `omarchy` and `omarchy-settings` packages under `/usr/share/omarchy`. Installation is driven by `omarchy-apply-system` (as root) plus `omarchy-provision-user` (as your user), not by `./install.sh`.
+- **v3 is source-based.** `omarchy update` runs `git pull` on your checkout, so a v3 install will pull itself onto v4 unless you pin it. If you stay on v3, do not run `omarchy update` unattended.
+
+### Before you run
+
+- **Secure Boot must be disabled.** The installer checks this and refuses to make any changes if it is still enabled.
+- **Take your own snapshot first.** The installer runs `boot-guards.sh`, which captures a snapshot of your mkinitcpio `HOOKS` array and pins limine's `TARGET_OS_NAME`/`ENABLE_UKI`/`BOOT_ORDER` so `omarchy-settings` cannot repoint your bootloader at its own UKI. That protects CachyOS's boot config — it is not a backup of your system.
+- **Have a rollback path.** This is expected to change the bootloader, initramfs and login setup. A snapper snapshot before you start is the cheapest insurance: boot limine and pick the snapshot from the `Snapshots` entry.
 
 **Note:** Please review the script contents before running to understand what changes will be made to your system.
 
